@@ -44,6 +44,14 @@ void main() {
       expect(result.nodeId, equals(1));
     });
 
+    test('should default timeDiff to 0 when the server omits it', () {
+      // WuKongIM marks timeDiff omitempty, so a zero difference is absent.
+      final result = ConnectResult.fromJson(
+          {"reasonCode": 1, "serverVersion": 5, "nodeId": 1});
+      expect(result.timeDiff, equals(0));
+      expect(result.reasonCode, equals(1));
+    });
+
     test('should parse minimal server response', () {
       // Minimal required fields
       final serverResponse = {"timeDiff": 100, "reasonCode": 1};

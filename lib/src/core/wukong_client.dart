@@ -77,8 +77,32 @@ class WuKongClient {
   /// Stream subscription for WebSocket messages
   StreamSubscription? _messageSubscription;
 
-  /// Creates a new WuKong client
-  WuKongClient(this._config, this._eventManager, this._logger);
+  /// Interval between heartbeat pings.
+  final Duration _pingInterval;
+
+  /// How long to wait for a pong before treating the connection as dead.
+  final Duration _pongTimeout;
+
+  /// Delay before the first reconnect attempt; doubles on each failure.
+  final Duration _initialReconnectDelay;
+
+  /// Creates a new WuKong client.
+  ///
+  /// The timing parameters default to [WuKongConstants]; tests shorten them.
+  WuKongClient(
+    this._config,
+    this._eventManager,
+    this._logger, {
+    Duration? pingInterval,
+    Duration? pongTimeout,
+    Duration? initialReconnectDelay,
+  })  : _pingInterval = pingInterval ??
+            const Duration(milliseconds: WuKongConstants.pingIntervalMs),
+        _pongTimeout = pongTimeout ??
+            const Duration(milliseconds: WuKongConstants.pongTimeoutMs),
+        _initialReconnectDelay = initialReconnectDelay ??
+            const Duration(
+                milliseconds: WuKongConstants.initialReconnectDelayMs);
 
   /// Whether the client is connected
   bool get isConnected => _isConnected;
@@ -432,7 +456,7 @@ class WuKongClient {
     _stopPing();
 
     _pingTimer = Timer.periodic(
-      Duration(milliseconds: WuKongConstants.pingIntervalMs),
+      _pingInterval,
       (timer) {
         if (_isConnected && _channel != null) {
           _sendPing();
@@ -442,8 +466,8 @@ class WuKongClient {
       },
     );
 
-    _logger.log(
-        'Ping timer started (${WuKongConstants.pingIntervalMs}ms interval)');
+    _logger
+        .log('Ping timer started (${_pingInterval.inMilliseconds}ms interval)');
   }
 
   /// Stops the ping timer
@@ -456,8 +480,7 @@ class WuKongClient {
   /// Sends a ping request
   void _sendPing() {
     try {
-      _sendRequest('ping', {}, WuKongConstants.pongTimeoutMs)
-          .catchError((error) {
+      _sendRequest('ping', {}, _pongTimeout.inMilliseconds).catchError((error) {
         _logger.log('Ping failed: ${error.runtimeType}');
         _eventManager.emit(
             WuKongEvent.error, WuKongError.timeoutError('Ping timeout'));
@@ -517,7 +540,7 @@ class WuKongClient {
     }
 
     final delay =
-        WuKongConstants.initialReconnectDelayMs * pow(2, _reconnectAttempts);
+        _initialReconnectDelay.inMilliseconds * pow(2, _reconnectAttempts);
     _reconnectAttempts++;
 
     _logger

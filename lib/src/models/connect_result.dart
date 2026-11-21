@@ -35,7 +35,8 @@ class ConnectResult {
     return ConnectResult(
       serverKey: json['serverKey'] as String?,
       salt: json['salt'] as String?,
-      timeDiff: json['timeDiff'] as int,
+      // WuKongIM encodes timeDiff with omitempty, so it is absent when 0.
+      timeDiff: (json['timeDiff'] as num?)?.toInt() ?? 0,
       reasonCode: json['reasonCode'] as int,
       serverVersion: json['serverVersion'] as int?,
       nodeId: json['nodeId'] as int?,
