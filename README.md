@@ -373,7 +373,7 @@ Future<SendResult> send({
 | Event | Trigger | Data Type |
 |-------|---------|-----------|
 | `WuKongEvent.connect` | Connection established | `ConnectResult` |
-| `WuKongEvent.disconnect` | Connection lost | `DisconnectInfo` |
+| `WuKongEvent.disconnect` | Connection lost, or the server kicked the session (`code` is the server reason code, `12` = connectKick; the SDK does not reconnect automatically after a kick) | `DisconnectInfo` |
 | `WuKongEvent.message` | Message received | `Message` |
 | `WuKongEvent.error` | Error occurred | `WuKongError` |
 | `WuKongEvent.sendAck` | Received message send acknowledgment | `SendResult` |

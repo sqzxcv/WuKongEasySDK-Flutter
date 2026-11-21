@@ -144,6 +144,35 @@ void main() {
     expect(recorder.connects, hasLength(3));
   });
 
+  test('a server DISCONNECT (kick) is terminal and reported once', () async {
+    await newClient().connect();
+    // WuKongIM sends DISCONNECT and closes the socket 2s (connect kick) or
+    // 10s (token update) later.
+    server.notify('disconnect', {
+      'reasonCode': WuKongReasonCode.connectKick.value,
+      'reason': 'login in other device',
+    });
+    await eventually(() => recorder.disconnects.isNotEmpty);
+    await server.sockets.single.close();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    expect(client.isConnected, isFalse);
+    expect(recorder.disconnects, hasLength(1));
+    expect(recorder.disconnects.single.code, 12);
+    expect(recorder.disconnects.single.reason, 'login in other device');
+    expect(server.count('connect'), 1, reason: 'must not auto-reconnect');
+  });
+
+  test('an explicit connect() after a kick connects again', () async {
+    await newClient().connect();
+    server.notify('disconnect', {'reasonCode': 12});
+    await eventually(() => recorder.disconnects.isNotEmpty);
+
+    await client.connect();
+    expect(client.isConnected, isTrue);
+    expect(server.count('connect'), 2);
+  });
+
   test('manual disconnect cancels a pending automatic reconnect', () async {
     server.answerPing = (_) => false;
     await newClient(

@@ -428,12 +428,23 @@ class WuKongClient {
   }
 
   /// Handles server-initiated disconnect
+  ///
+  /// WuKongIM sends DISCONNECT when it kicks the session: the token was
+  /// replaced (reason "账号在其他设备上登录"), another device of the same type
+  /// logged in ("login in other device"), or /user/device_quit was called (no
+  /// reason). All use reasonCode 12 (connectKick). Reconnecting with the same
+  /// credentials either fails authentication or kicks the other device in
+  /// turn, so this is terminal: stop automatic reconnection and report a
+  /// single disconnect carrying the server's code and reason. The app decides
+  /// whether to call [connect] again, e.g. with a refreshed token.
   void _handleServerDisconnect(dynamic params) {
     _logger.log('Server initiated disconnect');
     final disconnectInfo =
         DisconnectInfo.fromJson(params as Map<String, dynamic>? ?? {});
+    _manualDisconnect = true;
+    _cancelReconnect();
+    _cleanup();
     _eventManager.emit(WuKongEvent.disconnect, disconnectInfo);
-    _handleDisconnect();
   }
 
   /// Handles custom event notifications
