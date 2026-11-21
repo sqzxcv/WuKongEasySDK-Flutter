@@ -117,4 +117,46 @@ void main() {
     expect(ack['params']['messageId'], '42');
     expect(ack['params']['messageSeq'], 7);
   });
+
+  test('reconnects after a ping timeout on a half-open connection', () async {
+    // The first connection stops answering pings, like a network that drops
+    // packets without closing the socket.
+    server.answerPing = (connection) => connection > 0;
+    await newClient(
+      pingInterval: const Duration(milliseconds: 50),
+      pongTimeout: const Duration(milliseconds: 50),
+    ).connect();
+
+    await eventually(() => server.count('connect') >= 2 && client.isConnected);
+    expect(recorder.errors.map((e) => e.message), contains('Ping timeout'));
+    expect(recorder.disconnects.map((d) => d.code), contains(1006));
+    expect(recorder.connects, hasLength(2));
+  });
+
+  test('keeps reconnecting after repeated ping timeouts', () async {
+    server.answerPing = (connection) => connection >= 2;
+    await newClient(
+      pingInterval: const Duration(milliseconds: 50),
+      pongTimeout: const Duration(milliseconds: 50),
+    ).connect();
+
+    await eventually(() => server.count('connect') >= 3 && client.isConnected);
+    expect(recorder.connects, hasLength(3));
+  });
+
+  test('manual disconnect cancels a pending automatic reconnect', () async {
+    server.answerPing = (_) => false;
+    await newClient(
+      pingInterval: const Duration(milliseconds: 50),
+      pongTimeout: const Duration(milliseconds: 50),
+    ).connect();
+    await eventually(
+        () => recorder.errors.any((e) => e.message == 'Ping timeout'));
+    client.disconnect();
+    final connectsAtDisconnect = server.count('connect');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(client.isConnected, isFalse);
+    expect(server.count('connect'), connectsAtDisconnect);
+  });
 }

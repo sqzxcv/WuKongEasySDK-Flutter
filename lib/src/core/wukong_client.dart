@@ -86,6 +86,9 @@ class WuKongClient {
   /// Delay before the first reconnect attempt; doubles on each failure.
   final Duration _initialReconnectDelay;
 
+  /// Pending automatic reconnect attempt.
+  Timer? _reconnectTimer;
+
   /// Creates a new WuKong client.
   ///
   /// The timing parameters default to [WuKongConstants]; tests shorten them.
@@ -110,8 +113,16 @@ class WuKongClient {
   /// Whether the client is connecting
   bool get isConnecting => _isConnecting;
 
-  /// Connects to the WebSocket server
-  Future<void> connect() async {
+  /// Connects to the WebSocket server.
+  ///
+  /// An explicit call replaces any pending automatic reconnect: if it fails,
+  /// the caller decides whether to try again.
+  Future<void> connect() {
+    _cancelReconnect();
+    return _connect();
+  }
+
+  Future<void> _connect() async {
     if (_isConnected || _isConnecting) {
       _logger.log('Already connected or connecting');
       if (_connectionCompleter != null) {
@@ -168,7 +179,7 @@ class WuKongClient {
   void disconnect() {
     _logger.log('Manual disconnect initiated');
     _manualDisconnect = true;
-    _isReconnecting = false;
+    _cancelReconnect();
     _handleDisconnect();
   }
 
@@ -484,16 +495,27 @@ class WuKongClient {
 
   /// Sends a ping request
   void _sendPing() {
-    try {
-      _sendRequest('ping', {}, _pongTimeout.inMilliseconds).catchError((error) {
-        _logger.log('Ping failed: ${error.runtimeType}');
-        _eventManager.emit(
-            WuKongEvent.error, WuKongError.timeoutError('Ping timeout'));
-        _tryReconnect();
-      });
-    } catch (error) {
-      _logger.log('Ping send failed: ${error.runtimeType}');
-    }
+    final channel = _channel;
+    _sendRequest('ping', {}, _pongTimeout.inMilliseconds).catchError((error) {
+      // Pings rejected because the socket already closed are handled by
+      // _handleDisconnect. Only a timeout on the current socket means the
+      // connection is half-open.
+      if (error is! WuKongConnectionTimeoutException ||
+          !identical(channel, _channel) ||
+          !_isConnected) {
+        return null;
+      }
+      _logger.log('Ping timeout, dropping the connection');
+      _eventManager.emit(
+          WuKongEvent.error, WuKongError.timeoutError('Ping timeout'));
+      // A half-open socket may never report onDone, so close it through the
+      // normal disconnect path, which schedules a reconnect. Calling
+      // _tryReconnect() alone left _isConnected set: the scheduled connect()
+      // returned early, _isReconnecting stayed true and no later disconnect
+      // could start reconnecting again.
+      _handleDisconnect();
+      return null;
+    });
   }
 
   /// Handles WebSocket errors
@@ -559,19 +581,29 @@ class WuKongClient {
       ),
     );
 
-    Timer(Duration(milliseconds: delay.toInt()), () {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(Duration(milliseconds: delay.toInt()), () {
+      _reconnectTimer = null;
       if (!_isReconnecting) {
         _logger.log('Reconnection cancelled');
         return;
       }
 
-      connect().catchError((error) {
+      _connect().catchError((error) {
         _logger.log('Reconnection attempt failed: ${error.runtimeType}');
         if (_isReconnecting) {
           _scheduleReconnect();
         }
       });
     });
+  }
+
+  /// Stops automatic reconnection and resets its backoff.
+  void _cancelReconnect() {
+    _isReconnecting = false;
+    _reconnectAttempts = 0;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
   }
 
   /// Cleans up resources
@@ -612,7 +644,7 @@ class WuKongClient {
   void dispose() {
     _logger.log('Disposing WuKong client');
     _manualDisconnect = true;
-    _isReconnecting = false;
+    _cancelReconnect();
     _cleanup();
   }
 
