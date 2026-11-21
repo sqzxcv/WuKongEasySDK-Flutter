@@ -111,7 +111,11 @@ class Message {
   /// Creates a Message from JSON
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
-      header: MessageHeader.fromJson(json['header'] as Map<String, dynamic>),
+      // WuKongIM omits "header" when every flag is false, e.g. a notice sent
+      // without a header, or the sender's own message synced to its other
+      // devices (redDot is cleared for the sender).
+      header: MessageHeader.fromJson(
+          (json['header'] as Map?)?.cast<String, dynamic>() ?? const {}),
       messageId: json['messageId'] as String,
       messageSeq: json['messageSeq'] as int,
       timestamp: json['timestamp'] as int,

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wukong_easy_sdk/src/core/event_manager.dart';
 import 'package:wukong_easy_sdk/src/core/wukong_client.dart';
@@ -88,5 +90,31 @@ void main() {
     // would fail this test.
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect(client.isConnected, isFalse);
+  });
+
+  test('delivers and acknowledges RECV without a header', () async {
+    await newClient().connect();
+    final payload = base64Encode(utf8.encode(jsonEncode({
+      'type': 1000,
+      'staff_uid': 's1-staff',
+    })));
+    // WuKongIM omits "header" when noPersist/redDot/syncOnce/dup are all
+    // false, e.g. system notices sent without a header or a user's own
+    // messages synced to another device (redDot is cleared for the sender).
+    server.notify('recv', {
+      'messageId': '42',
+      'messageSeq': 7,
+      'timestamp': 1,
+      'channelId': 'conv_v1-vtr',
+      'channelType': 2,
+      'fromUid': '',
+      'payload': payload,
+    });
+
+    final ack = await server.next('recvack');
+    expect(recorder.messages.single.messageSeq, 7);
+    expect(recorder.messages.single.header.redDot, isNull);
+    expect(ack['params']['messageId'], '42');
+    expect(ack['params']['messageSeq'], 7);
   });
 }

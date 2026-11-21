@@ -46,6 +46,20 @@ void main() {
     expect(message.setting?.stream, isTrue);
     expect(message.toJson()['setting'], {'stream': true});
   });
+  test('RECV without a header parses with empty header flags', () {
+    final message = Message.fromJson({
+      'messageId': '1',
+      'messageSeq': 1,
+      'timestamp': 0,
+      'channelId': 'c',
+      'channelType': 2,
+      'fromUid': 'w',
+      'payload': '',
+    });
+    expect(message.header.redDot, isNull);
+    expect(message.header.noPersist, isNull);
+    expect(message.header.toJson(), isEmpty);
+  });
   test('event data decodes JSON strings and preserves object and null', () {
     EventNotification event(dynamic data) => EventNotification.fromJson(
         {'id': '1', 'type': 'stream.delta', 'timestamp': 0, 'data': data});
