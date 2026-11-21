@@ -74,4 +74,19 @@ void main() {
     expect(client.isConnected, isTrue);
     expect(recorder.connects.single.timeDiff, 0);
   });
+
+  test(
+      'a failed connect surfaces through connect() only, not as an '
+      'uncaught async error', () async {
+    // WuKongIM v2.2.4 never answers a CONNECT with a wrong token; it closes
+    // the socket after its idle limit.
+    server.connack = (_) => null;
+    server.closeUnansweredConnectAfter = const Duration(milliseconds: 50);
+
+    await expectLater(newClient().connect(), throwsA(isA<Exception>()));
+    // An orphaned failed Future is reported to the zone asynchronously and
+    // would fail this test.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(client.isConnected, isFalse);
+  });
 }

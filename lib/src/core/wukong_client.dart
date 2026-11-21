@@ -124,6 +124,11 @@ class WuKongClient {
     _isConnecting = true;
     _connectionCompleter = Completer<void>();
     final future = _connectionCompleter!.future;
+    // On failure this method rethrows instead of returning [future], so the
+    // completer's error would otherwise be reported as an uncaught async
+    // error. Concurrent callers that joined via [_connectionCompleter] still
+    // receive it.
+    future.ignore();
 
     try {
       _logger.log('Connecting to WuKong server...');
