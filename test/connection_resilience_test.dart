@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wukong_easy_sdk/src/core/event_manager.dart';
@@ -90,6 +91,26 @@ void main() {
     // would fail this test.
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect(client.isConnected, isFalse);
+  });
+
+  test('a failed WebSocket handshake surfaces through connect() only',
+      () async {
+    // A peer that accepts TCP and hangs up before the HTTP upgrade response,
+    // like a proxy whose upstream is down.
+    final raw = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(raw.close);
+    raw.listen((socket) => socket.destroy());
+    client = WuKongClient(
+      WuKongConfig(
+          serverUrl: 'ws://127.0.0.1:${raw.port}', uid: 'u1-staff', token: 't'),
+      recorder.events,
+      const WuKongLogger(),
+    );
+
+    await expectLater(client.connect(), throwsA(anything));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(client.isConnected, isFalse);
+    expect(recorder.errors, isNotEmpty);
   });
 
   test('delivers and acknowledges RECV without a header', () async {

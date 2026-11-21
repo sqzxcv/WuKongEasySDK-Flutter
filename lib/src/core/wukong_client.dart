@@ -146,6 +146,10 @@ class WuKongClient {
 
       // Create WebSocket connection
       _channel = WebSocketChannel.connect(Uri.parse(_config.serverUrl));
+      // A failed handshake is also delivered to the stream listener below,
+      // which reports it and closes the attempt; without a listener the
+      // `ready` future's copy of the error would escape as uncaught.
+      _channel!.ready.ignore();
 
       // Listen for messages
       _messageSubscription = _channel!.stream.listen(

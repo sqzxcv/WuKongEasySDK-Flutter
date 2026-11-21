@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Connecting no longer fails when the server omits `timeDiff` from the CONNACK (WuKongIM encodes it with `omitempty`, so it is absent when the clocks agree).
-- A failed `connect()` no longer also leaks an uncaught async error.
+- A failed `connect()` (including a failed WebSocket handshake) no longer also leaks an uncaught async error.
 - Messages whose RECV carries no `header` (all flags false, e.g. a user's own messages synced to their other devices) are delivered and acknowledged instead of being dropped.
 - A heartbeat timeout now closes the half-open socket and reconnects; previously the client stayed marked connected and never reconnected again.
 - A server DISCONNECT (kick) is reported once with the server's reason code and reason, and the SDK no longer reconnects automatically with the kicked credentials.
